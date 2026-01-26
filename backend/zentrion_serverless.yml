@@ -1,0 +1,140 @@
+service: zentrion-backend
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.11
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  
+  environment:
+    STAGE: ${self:provider.stage}
+    DYNAMODB_TABLE: ${self:service}-${self:provider.stage}-scans
+    JWT_SECRET: ${env:JWT_SECRET}
+    ALLOW_ANONYMOUS: ${env:ALLOW_ANONYMOUS, 'false'}
+    LOG_LEVEL: INFO
+  
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}/index/*"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "*"
+
+functions:
+  # Health check
+  health:
+    handler: src/api/health.handler
+    events:
+      - http:
+          path: /health
+          method: get
+          cors: true
+
+  # Scan operations
+  startScan:
+    handler: src/api/scan/start_scan.handler
+    timeout: 30
+    events:
+      - http:
+          path: /scan/start
+          method: post
+          cors: true
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  getScanStatus:
+    handler: src/api/scan/get_scan_status.handler
+    events:
+      - http:
+          path: /scan/{scan_id}/status
+          method: get
+          cors: true
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  getScanResult:
+    handler: src/api/scan/get_scan_result.handler
+    events:
+      - http:
+          path: /scan/{scan_id}/result
+          method: get
+          cors: true
+          authorizer:
+            name: authorizer
+            resultTtlInSeconds: 300
+            identitySource: method.request.header.Authorization
+            type: token
+
+  # JWT Authorizer
+  authorizer:
+    handler: src/auth/authorizer.handler
+
+  # Async scan processor (invoked internally)
+  processScan:
+    handler: src/core/orchestrator.handler
+    timeout: 900
+    memorySize: 1024
+
+resources:
+  Resources:
+    ScansTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
+    slim: true
+    strip: false
