@@ -7,14 +7,14 @@ provider:
   runtime: python3.11
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
-  
+
   environment:
     STAGE: ${self:provider.stage}
     DYNAMODB_TABLE: ${self:service}-${self:provider.stage}-scans
     JWT_SECRET: ${env:JWT_SECRET}
     ALLOW_ANONYMOUS: ${env:ALLOW_ANONYMOUS, 'false'}
     LOG_LEVEL: INFO
-  
+
   iam:
     role:
       statements:
@@ -31,22 +31,25 @@ provider:
             - "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}/index/*"
         - Effect: Allow
           Action:
+            - lambda:InvokeFunction
+          Resource:
+            - "arn:aws:lambda:${self:provider.region}:*:function:${self:service}-${self:provider.stage}-processScan"
+        - Effect: Allow
+          Action:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
           Resource: "*"
 
 functions:
-  # Health check
   health:
-    handler: src/api/health.handler
+    handler: src/api/api_health.handler
     events:
       - http:
           path: /health
           method: get
           cors: true
 
-  # Scan operations
   startScan:
     handler: src/api/scan/start_scan.handler
     timeout: 30
@@ -62,7 +65,7 @@ functions:
             type: token
 
   getScanStatus:
-    handler: src/api/scan/get_scan_status.handler
+    handler: src/api/scan/get_status.handler
     events:
       - http:
           path: /scan/{scan_id}/status
@@ -75,7 +78,7 @@ functions:
             type: token
 
   getScanResult:
-    handler: src/api/scan/get_scan_result.handler
+    handler: src/api/scan/get_result.handler
     events:
       - http:
           path: /scan/{scan_id}/result
@@ -87,13 +90,11 @@ functions:
             identitySource: method.request.header.Authorization
             type: token
 
-  # JWT Authorizer
   authorizer:
-    handler: src/auth/authorizer.handler
+    handler: src/auth/auth_authorizer.handler
 
-  # Async scan processor (invoked internally)
   processScan:
-    handler: src/core/orchestrator.handler
+    handler: src/core/core_orchestrator.handler
     timeout: 900
     memorySize: 1024
 

@@ -46,3 +46,29 @@ next-env.d.ts
 # ======================
 .DS_Store
 Thumbs.db
+
+
+# ======================
+# Python
+# ======================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+
+# ======================
+# Serverless Framework
+# ======================
+.serverless/
+backend/.serverless/
+backend/node_modules/
+
+# ======================
+# Test & Coverage
+# ======================
+.coverage
+htmlcov/
+.pytest_cache/

@@ -1,9 +1,8 @@
 """
 JWT token validation and utilities.
 """
-import jwt
+from jose import jwt, JWTError
 from typing import Dict, Optional
-from jose import JWTError
 
 from src.config.config_settings import settings
 from src.utils.utils_logger import get_logger

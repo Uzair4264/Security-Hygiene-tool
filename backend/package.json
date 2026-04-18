@@ -1,0 +1,10 @@
+{
+  "name": "zentrion-backend",
+  "version": "1.0.0",
+  "description": "Security Hygiene Automation Platform backend",
+  "private": true,
+  "devDependencies": {
+    "serverless": "^3.0.0",
+    "serverless-python-requirements": "^6.0.0"
+  }
+}
